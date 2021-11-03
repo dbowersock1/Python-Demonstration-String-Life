@@ -33,6 +33,8 @@ def ProcessData(df):
     rodSizes = (round(num) for num in df["OD Nominal"].tolist()) # Returns all rod sizes from dataframe/excel file
     #! Ensure rodGrades only returns a list!
     rodGrades = df["Grade"].tolist() # Returns all rod grades from dataframe/excel file
+    for i in range(len(rodGrades)):
+        rodGrades[i] = str(rodGrades[i])
     uniqueSizeandGradeList = list(set(zip(rodSizes, rodGrades))) # Elimnates duplicates then converts back to list
     uniqueListSizeGrade = [] # List containing all class objects of uniquRodGradeSize
     for item in uniqueSizeandGradeList:
@@ -56,18 +58,20 @@ def ProcessData(df):
         grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
 
-        #Populates arrays with values from data frame row
-        #! create check that filters out pumps
-        #! Create an average of the different kinds of rod grade!
+        # Data population
         for j in range(joints):
-            #! Create logic that populates unique grade and size, calculates average, and populates\
-            
+            #! Create logic that populates unique grade and size, calculates average, and populates
             for item in uniqueListSizeGrade:
-                print(item.rodGrade, item.rodSize)
-                if (grade == item.rodGrade and size == item.rodSize):
-                    item.dataCollectionList.append("test")
-
-
+               if (grade == item.rodGrade and size == item.rodSize):
+                   item.dataCollectionList.append({
+                       "daysInHole" : daysInHole,
+                       "UWI" : dataSeries["UWI"],
+                       "Run Job" : dataSeries["Run Job"],
+                       "Pull Job" : dataSeries["Pull Job"],
+                       "Pull Reason" : dataSeries["Pull Reason"]
+                       })
+                   item.calculateAverageRunLife()
+            #Populates arrays with values from data frame row
             element = j + firstJoint
             arrayElement = superiorRodString[element]["daysInHole"]
             if (daysInHole > arrayElement):
@@ -102,6 +106,12 @@ class uniqueRodGradeSize:
     def calculateAverageRunLife(self):
         if (self.dataCollectionList.count == 0):
             raise ValueError ("Tried calculating average when there was nothing in list!")
+        count = 0
+        sum = 0
+        for item in self.dataCollectionList:
+            count += 1
+            sum += item["daysInHole"]
+        self.averageRunLife = sum / count
         
         
 
