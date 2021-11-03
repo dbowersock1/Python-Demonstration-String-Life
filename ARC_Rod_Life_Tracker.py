@@ -20,6 +20,7 @@ def main():
 
     # Processes passed data file and inputs specific information into arrays.
 def ProcessData(df):
+
     # Key arrays that will be exported as data. 
     arrayLength = 262 # Each array index is a joint of rod. 262 = 262 joints = 2000m. 
     superiorRodString = [{ # Highest average joint. ie) which rod string produces the best results
@@ -27,18 +28,7 @@ def ProcessData(df):
                 "grade" : "default",
                 "daysInHole" : 0
         }]*arrayLength     
-    dataTracker =[[] for i in range(arrayLength)] # Keeps track of all the information used to create superiorRodString # doing this = [[]]*4 gives error. List of list of dictionaries. Each parent element is rod string
-
-    # Generates unique list of rod size to grade tuples. Used later to have an average run time assosiation. Used to populate key SuperiorRodString Array!!
-    rodSizes = (round(num) for num in df["OD Nominal"].tolist()) # Returns all rod sizes from dataframe/excel file
-    #! Ensure rodGrades only returns a list!
-    rodGrades = df["Grade"].tolist() # Returns all rod grades from dataframe/excel file
-    for i in range(len(rodGrades)):
-        rodGrades[i] = str(rodGrades[i])
-    uniqueSizeandGradeList = list(set(zip(rodSizes, rodGrades))) # Elimnates duplicates then converts back to list
-    uniqueListSizeGrade = [] # List containing all class objects of uniquRodGradeSize
-    for item in uniqueSizeandGradeList:
-        uniqueListSizeGrade.append(uniqueRodGradeSize(item))
+    dataDict = dict()
 
     # Iterates over dataframe row x row, or rod component x rod component
     for i in range(df.index.size):
@@ -57,20 +47,20 @@ def ProcessData(df):
             firstJoint = math.floor(dataSeries["Top Depth"] / 7.62) # Rounds down to get # of rods ... a fraction won't do
         grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
+        rodGradeSizeTuple = (grade, size)
 
         # Data population
+
+        #populate data dict
+        if i == 0 :
+            dataDict[rodGradeSizeTuple] = [daysInHole]
+        elif rodGradeSizeTuple in dataDict.keys() :
+            dataDict[rodGradeSizeTuple].append(daysInHole)
+        else:
+            dataDict[rodGradeSizeTuple] = [daysInHole]
+
+        # populate SuperiorRodString
         for j in range(joints):
-            #! Create logic that populates unique grade and size, calculates average, and populates
-            for item in uniqueListSizeGrade:
-               if (grade == item.rodGrade and size == item.rodSize):
-                   item.dataCollectionList.append({
-                       "daysInHole" : daysInHole,
-                       "UWI" : dataSeries["UWI"],
-                       "Run Job" : dataSeries["Run Job"],
-                       "Pull Job" : dataSeries["Pull Job"],
-                       "Pull Reason" : dataSeries["Pull Reason"]
-                       })
-                   item.calculateAverageRunLife()
             #Populates arrays with values from data frame row
             element = j + firstJoint
             arrayElement = superiorRodString[element]["daysInHole"]
@@ -80,40 +70,12 @@ def ProcessData(df):
                 "grade" : grade,
                 "daysInHole" : daysInHole
                 }
-            dataTracker[element].append({
-                "size" : round(dataSeries["OD Nominal"]),
-                "grade" : dataSeries["Grade"],
-                "daysInHole" : daysInHole,
-                "UWI" : dataSeries["UWI"],
-                "Run Job" : dataSeries["Run Job"],
-                "Pull Job" : dataSeries["Pull Job"],
-                "Pull Reason" : dataSeries["Pull Reason"]
-                })
+           
 
     dfExport1 = pd.DataFrame(superiorRodString)
-    dfExport2 = pd.DataFrame(dataTracker)
     dfExport1.to_excel(r"E:\Rod Component Analysis\dataExport.xlsx")
-    dfExport2.to_excel(r"E:\Rod Component Analysis\dataExport2.xlsx")
-     
     
-class uniqueRodGradeSize:
-    def __init__(self, uniqueTupleList):
-        self.rodSize = uniqueTupleList[0]
-        self.rodGrade = uniqueTupleList[1]
-        self.averageRunLife = 0
-        self.dataCollectionList = [] # elements inside defined in proccessing data list!
-                
-    def calculateAverageRunLife(self):
-        if (self.dataCollectionList.count == 0):
-            raise ValueError ("Tried calculating average when there was nothing in list!")
-        count = 0
-        sum = 0
-        for item in self.dataCollectionList:
-            count += 1
-            sum += item["daysInHole"]
-        self.averageRunLife = sum / count
-        
-        
+     
 
 
 if __name__=="__main__":
