@@ -57,11 +57,7 @@ def ProcessData(df):
 
         # DATA POPULATION
         # populate data dict
-        if i == 0 :
-            dataDict[rodGradeSizeTuple] = [daysInHole]
-            dataDictJobCorr[rodGradeSizeTuple] = [job]
-            dataDictJointCorr[rodGradeSizeTuple] = [jointRange]
-        elif rodGradeSizeTuple in dataDict.keys() :
+        if rodGradeSizeTuple in dataDict.keys() :
             dataDict[rodGradeSizeTuple].append(daysInHole)
             dataDictJobCorr[rodGradeSizeTuple].append(job)
             dataDictJointCorr[rodGradeSizeTuple].append(jointRange)
@@ -69,9 +65,11 @@ def ProcessData(df):
             dataDict[rodGradeSizeTuple] = [daysInHole]
             dataDictJobCorr[rodGradeSizeTuple] = [job]
             dataDictJointCorr[rodGradeSizeTuple] = [jointRange]
+    
 
         # populate SuperiorRodString
         #! This might have to be done once all the rod grade is populated!! Otherwise the averages start to not make sense!
+        
         for j in range(joints):
             #Populates arrays with values from data frame row
             element = j + firstJoint
