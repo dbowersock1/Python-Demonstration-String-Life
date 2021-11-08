@@ -1,20 +1,21 @@
-#! Will import as needed to understand what each import does
 import pandas as pd
 import math
 from datetime import datetime
+# Modules used to output data in csv
+import csv 
+from itertools import zip_longest
 
 #! OVERVIEW
-def main():
-    #! Retreive program data from JSON file ... is there a need?
 
-    #! Read Excel File and create Pandas Data Frame from information
+
+def main():
+
+    # Read Excel File and create Pandas Data Frame from information
     excelFileLocation = r"E:\Rod Component Analysis\15-36 Pad Rod Components.xlsx"
     df = pd.read_excel(excelFileLocation)
  
-    #! Processes data from DataTable
+    # Processes data from DataTable. Prints to excel files
     ProcessData(df)
-
-    #! Store program data in JSON File so program 
 
     print ("test")
 
@@ -26,10 +27,13 @@ def ProcessData(df):
     superiorRodString = [{ # Highest average joint. ie) which rod string produces the best results
                 "size" : 0,
                 "grade" : "default",
-                "daysInHole" : 0
+                "AvgdaysInHole" : 0
         }]*arrayLength     
     dataDict = dict()
+    dataDictJobCorr = dict()
+    dataDictJointCorr = dict()
 
+    # DATA EXTRACTION
     # Iterates over dataframe row x row, or rod component x rod component
     for i in range(df.index.size):
         # Pulls key information from dataframe row
@@ -45,38 +49,58 @@ def ProcessData(df):
             firstJoint = 0
         else: 
             firstJoint = math.floor(dataSeries["Top Depth"] / 7.62) # Rounds down to get # of rods ... a fraction won't do
+        jointRange = "From: " + str(firstJoint) + " To: " + str(firstJoint+joints)
+        job = dataSeries["UWI"] + " " + str(dataSeries["Run Date"])
         grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
         rodGradeSizeTuple = (grade, size)
 
-        # Data population
-
-        #populate data dict
+        # DATA POPULATION
+        # populate data dict
         if i == 0 :
             dataDict[rodGradeSizeTuple] = [daysInHole]
+            dataDictJobCorr[rodGradeSizeTuple] = [job]
+            dataDictJointCorr[rodGradeSizeTuple] = [jointRange]
         elif rodGradeSizeTuple in dataDict.keys() :
             dataDict[rodGradeSizeTuple].append(daysInHole)
+            dataDictJobCorr[rodGradeSizeTuple].append(job)
+            dataDictJointCorr[rodGradeSizeTuple].append(jointRange)
         else:
             dataDict[rodGradeSizeTuple] = [daysInHole]
+            dataDictJobCorr[rodGradeSizeTuple] = [job]
+            dataDictJointCorr[rodGradeSizeTuple] = [jointRange]
 
         # populate SuperiorRodString
+        #! This might have to be done once all the rod grade is populated!! Otherwise the averages start to not make sense!
         for j in range(joints):
             #Populates arrays with values from data frame row
             element = j + firstJoint
-            arrayElement = superiorRodString[element]["daysInHole"]
-            if (daysInHole > arrayElement):
+            avgDaysInHole = sum(dataDict[rodGradeSizeTuple]) / len(dataDict[rodGradeSizeTuple])
+            arrayElement = superiorRodString[element]["AvgdaysInHole"]
+            if (avgDaysInHole > arrayElement):
                 superiorRodString [element] = {
                 "size" : size,
                 "grade" : grade,
-                "daysInHole" : daysInHole
+                "AvgdaysInHole" : avgDaysInHole
                 }
            
-
+    # Exports primary data. Superior rod string. Via pandas 
     dfExport1 = pd.DataFrame(superiorRodString)
-    dfExport1.to_excel(r"E:\Rod Component Analysis\dataExport.xlsx")
-    
-     
-
+    with pd.ExcelWriter(r"E:\Rod Component Analysis\SuperiorRodString.xlsx") as writer:
+        dfExport1.to_excel(writer, sheet_name="Superior rod string")
+    # Exports data that only can be exported to CSVs (uneven lists that cannot be exported by Pandas)
+    with open ("E:\Rod Component Analysis\RodGradeAverageDaysData.csv", 'w', newline = "") as outputcsv:
+        writer = csv.writer(outputcsv)
+        writer.writerow(dataDict.keys())
+        writer.writerows(zip_longest(*dataDict.values()))
+    with open ("E:\Rod Component Analysis\RodGradeSizeJobCorr.csv", 'w', newline = "") as outputcsv:
+        writer = csv.writer(outputcsv)
+        writer.writerow(dataDictJobCorr.keys())
+        writer.writerows(zip_longest(*dataDictJobCorr.values()))
+    with open ("E:\Rod Component Analysis\RodGradeSizeJointCorr.csv", 'w', newline = "") as outputcsv:
+        writer = csv.writer(outputcsv)
+        writer.writerow(dataDictJointCorr.keys())
+        writer.writerows(zip_longest(*dataDictJointCorr.values()))
 
 if __name__=="__main__":
     main()
