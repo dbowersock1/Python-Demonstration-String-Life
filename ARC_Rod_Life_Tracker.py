@@ -6,37 +6,35 @@ import csv
 from itertools import zip_longest
 
 #! OVERVIEW
-
+#! Maybe create graphs here in python instead of exporting to excel?? Maybe that's easier??
 
 def main():
 
     # Read Excel File and create Pandas Data Frame from information
-    excelFileLocation = r"E:\Rod Component Analysis\15-36 Pad Rod Components.xlsx"
+    excelFileLocation = r"E:\Rod Component Analysis\new dev.xlsx"
     df = pd.read_excel(excelFileLocation)
  
-    # Processes data from DataTable. Prints to excel files
-    ProcessData(df)
+    # Processes data from DataTable. Returns dataDictioinary. Each index corrosponds to joint of rod
+    dataDict = ProcessData(df)
 
-    print ("test")
+    #! Logic that creates the superior rod string. Returns array!
+    superiorRodStringAvg, superiorRodStringHighestRun = dataAnalyze(dataDict)
+
+    # Splits data into excel formats
+    excelCreation(dataDict, superiorRodStringAvg, superiorRodStringHighestRun)
+
+    print ("end of program")
 
     # Processes passed data file and inputs specific information into arrays.
 def ProcessData(df):
-
-    # Key arrays that will be exported as data. 
-    arrayLength = 262 # Each array index is a joint of rod. 262 = 262 joints = 2000m. 
-    superiorRodString = [{ # Highest average joint. ie) which rod string produces the best results
-                "size" : 0,
-                "grade" : "default",
-                "AvgdaysInHole" : 0
-        }]*arrayLength     
-    dataDict = dict()
-    dataDictJobCorr = dict()
-    dataDictJointCorr = dict()
-
+    arrayLength = 350 # Each array index is a joint of rod. eg) 262 = 262 joints = 2000m.  
+    dataDict = [] # List of Dicts of Dicts of lists. Contains all data
+    for i in range(arrayLength):
+        dataDict.append(dict())
+   
     # DATA EXTRACTION
     # Iterates over dataframe row x row, or rod component x rod component
     for i in range(df.index.size):
-        # Pulls key information from dataframe row
         dataSeries = df.iloc[i] # iloc (Pandas) returns the values + headers of index (integer only) as a new series w/ headers as index and values as values
         startDate = dataSeries["Run Date"]
         if (pd.isnull(dataSeries["Pull Date"])): #! Catches error where there is a blank pull date ... often meaning it hasn't been pulled yet. ie) still in hole
@@ -44,61 +42,78 @@ def ProcessData(df):
         else:   
             endDate = dataSeries ["Pull Date"]
         daysInHole = (endDate - startDate).days
-        joints = dataSeries["Joints"]
+        joints = int(dataSeries["Joints"])
         if (dataSeries["Top Depth"] < 0 ): # Catches error where top depth is negative value
             firstJoint = 0
-        else: 
-            firstJoint = math.floor(dataSeries["Top Depth"] / 7.62) # Rounds down to get # of rods ... a fraction won't do
-        jointRange = "From: " + str(firstJoint) + " To: " + str(firstJoint+joints)
+        else:
+            offset = 0
+            firstJoint = math.floor((dataSeries["Top Depth"]+offset) / 7.62) # Rounds down to get # of rods ... a fraction won't do
         job = dataSeries["UWI"] + " " + str(dataSeries["Run Date"])
         grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
         rodGradeSizeTuple = (grade, size)
 
         # DATA POPULATION
-        # populate data dict
-        if rodGradeSizeTuple in dataDict.keys() :
-            dataDict[rodGradeSizeTuple].append(daysInHole)
-            dataDictJobCorr[rodGradeSizeTuple].append(job)
-            dataDictJointCorr[rodGradeSizeTuple].append(jointRange)
-        else:
-            dataDict[rodGradeSizeTuple] = [daysInHole]
-            dataDictJobCorr[rodGradeSizeTuple] = [job]
-            dataDictJointCorr[rodGradeSizeTuple] = [jointRange]
+        for j in range(joints): 
+            index = j + firstJoint
+            if rodGradeSizeTuple in dataDict[index]:
+                dataDict[index][rodGradeSizeTuple]["daysInHole"].append(daysInHole)
+                dataDict[index][rodGradeSizeTuple]["job"].append(job)
+            else:
+                dataDict[index][rodGradeSizeTuple] = {"daysInHole" : [daysInHole], "job" : [job]}
+    return dataDict
     
 
-        # populate SuperiorRodString
-        #! This might have to be done once all the rod grade is populated!! Otherwise the averages start to not make sense!
-        
-        for j in range(joints):
-            #Populates arrays with values from data frame row
-            element = j + firstJoint
-            avgDaysInHole = sum(dataDict[rodGradeSizeTuple]) / len(dataDict[rodGradeSizeTuple])
-            arrayElement = superiorRodString[element]["AvgdaysInHole"]
-            if (avgDaysInHole > arrayElement):
-                superiorRodString [element] = {
-                "size" : size,
-                "grade" : grade,
-                "AvgdaysInHole" : avgDaysInHole
-                }
-           
-    # Exports primary data. Superior rod string. Via pandas 
-    dfExport1 = pd.DataFrame(superiorRodString)
-    with pd.ExcelWriter(r"E:\Rod Component Analysis\SuperiorRodString.xlsx") as writer:
-        dfExport1.to_excel(writer, sheet_name="Superior rod string")
-    # Exports data that only can be exported to CSVs (uneven lists that cannot be exported by Pandas)
-    with open ("E:\Rod Component Analysis\RodGradeAverageDaysData.csv", 'w', newline = "") as outputcsv:
-        writer = csv.writer(outputcsv)
-        writer.writerow(dataDict.keys())
-        writer.writerows(zip_longest(*dataDict.values()))
-    with open ("E:\Rod Component Analysis\RodGradeSizeJobCorr.csv", 'w', newline = "") as outputcsv:
-        writer = csv.writer(outputcsv)
-        writer.writerow(dataDictJobCorr.keys())
-        writer.writerows(zip_longest(*dataDictJobCorr.values()))
-    with open ("E:\Rod Component Analysis\RodGradeSizeJointCorr.csv", 'w', newline = "") as outputcsv:
-        writer = csv.writer(outputcsv)
-        writer.writerow(dataDictJointCorr.keys())
-        writer.writerows(zip_longest(*dataDictJointCorr.values()))
+def dataAnalyze(dataDict):
+    # [2] important data sets; highest avg and highest days in hole
+    superiorRodStringAvg = []
+    for i in range(len(dataDict)):
+        superiorRodStringAvg.append({
+            "gradeSize" : "default",
+            "daysInHole" : 0,
+            "count" : 0
+            })
+    superiorRodStringHighestRun = []
+    for i in range(len(dataDict)):
+        superiorRodStringHighestRun.append({
+            "gradeSize" : "default",
+            "daysInHole" : 0,
+            })
+    for i in range(len(dataDict)):
+        for key, value in dataDict[i].items():
+            # Superior Rod String Avg Updater
+            avg = sum(value["daysInHole"]) / len(value["daysInHole"])
+            if avg > superiorRodStringAvg[i]["daysInHole"] and len(value["daysInHole"])>1:
+                superiorRodStringAvg[i]["daysInHole"] = avg
+                superiorRodStringAvg[i]["gradeSize"] = key 
+                superiorRodStringAvg[i]["count"] = len(value["daysInHole"])
+            #! Superior Rod String Highest Run Updater
+            if max(value["daysInHole"]) > superiorRodStringHighestRun[i]["daysInHole"]:
+                superiorRodStringHighestRun[i]["daysInHole"] = max(value["daysInHole"]) 
+                superiorRodStringHighestRun[i]["gradeSize"] = key
+
+    return superiorRodStringAvg, superiorRodStringHighestRun
+
+def excelCreation(dataDict, superiorRodStringAvg, superiorRodStringHighestRun):
+    # Superior Rod String Export
+    df = pd.DataFrame(superiorRodStringAvg)
+    df2 = pd.DataFrame(superiorRodStringHighestRun)
+    exportLink = r'E:\Rod Component Analysis\Superior Rod String Avg.xlsx'
+    exportLink2 = r'E:\Rod Component Analysis\Superior Rod String Highest Run.xlsx'
+    df.to_excel(exportLink)
+    df2.to_excel(exportLink2)
+
+    # Supportig Data Export
+    with open (r'E:\Rod Component Analysis\All Data.csv', 'w', newline="") as f:
+         writer = csv.writer(f)
+         writer.writerow(["Joint", "Grade/Size", "Days In Hole", "Job"])
+         for i in range(len(dataDict)):
+             for key in dataDict[i].keys():
+                 for j in range(len(dataDict[i][key]["daysInHole"])):
+                       writer.writerow([i,key,dataDict[i][key]["daysInHole"][j],dataDict[i][key]["job"][j]])
+       
+    
+                
 
 if __name__=="__main__":
     main()
