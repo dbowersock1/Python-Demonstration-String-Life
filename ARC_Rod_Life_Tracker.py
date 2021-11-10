@@ -1,48 +1,40 @@
-#! Will import as needed to understand what each import does
 import pandas as pd
 import math
 from datetime import datetime
+# Modules used to output data in csv
+import csv 
+from itertools import zip_longest
 
 #! OVERVIEW
-def main():
-    #! Retreive program data from JSON file ... is there a need?
+#! Maybe create graphs here in python instead of exporting to excel?? Maybe that's easier??
 
-    #! Read Excel File and create Pandas Data Frame from information
-    excelFileLocation = r"E:\Rod Component Analysis\15-36 Pad Rod Components.xlsx"
+def main():
+
+    # Read Excel File and create Pandas Data Frame from information
+    excelFileLocation = r"E:\Rod Component Analysis\new dev.xlsx"
     df = pd.read_excel(excelFileLocation)
  
-    #! Processes data from DataTable
-    ProcessData(df)
+    # Processes data from DataTable. Returns dataDictioinary. Each index corrosponds to joint of rod
+    dataDict = ProcessData(df)
 
-    #! Store program data in JSON File so program 
+    #! Logic that creates the superior rod string. Returns array!
+    superiorRodStringAvg, superiorRodStringHighestRun = dataAnalyze(dataDict)
 
-    print ("test")
+    # Splits data into excel formats
+    excelCreation(dataDict, superiorRodStringAvg, superiorRodStringHighestRun)
+
+    print ("end of program")
 
     # Processes passed data file and inputs specific information into arrays.
 def ProcessData(df):
-    # Key arrays that will be exported as data. 
-    arrayLength = 262 # Each array index is a joint of rod. 262 = 262 joints = 2000m. 
-    superiorRodString = [{ # Highest average joint. ie) which rod string produces the best results
-                "size" : 0,
-                "grade" : "default",
-                "daysInHole" : 0
-        }]*arrayLength     
-    dataTracker =[[] for i in range(arrayLength)] # Keeps track of all the information used to create superiorRodString # doing this = [[]]*4 gives error. List of list of dictionaries. Each parent element is rod string
-
-    # Generates unique list of rod size to grade tuples. Used later to have an average run time assosiation. Used to populate key SuperiorRodString Array!!
-    rodSizes = (round(num) for num in df["OD Nominal"].tolist()) # Returns all rod sizes from dataframe/excel file
-    #! Ensure rodGrades only returns a list!
-    rodGrades = df["Grade"].tolist() # Returns all rod grades from dataframe/excel file
-    for i in range(len(rodGrades)):
-        rodGrades[i] = str(rodGrades[i])
-    uniqueSizeandGradeList = list(set(zip(rodSizes, rodGrades))) # Elimnates duplicates then converts back to list
-    uniqueListSizeGrade = [] # List containing all class objects of uniquRodGradeSize
-    for item in uniqueSizeandGradeList:
-        uniqueListSizeGrade.append(uniqueRodGradeSize(item))
-
+    arrayLength = 350 # Each array index is a joint of rod. eg) 262 = 262 joints = 2000m.  
+    dataDict = [] # List of Dicts of Dicts of lists. Contains all data
+    for i in range(arrayLength):
+        dataDict.append(dict())
+   
+    # DATA EXTRACTION
     # Iterates over dataframe row x row, or rod component x rod component
     for i in range(df.index.size):
-        # Pulls key information from dataframe row
         dataSeries = df.iloc[i] # iloc (Pandas) returns the values + headers of index (integer only) as a new series w/ headers as index and values as values
         startDate = dataSeries["Run Date"]
         if (pd.isnull(dataSeries["Pull Date"])): #! Catches error where there is a blank pull date ... often meaning it hasn't been pulled yet. ie) still in hole
@@ -50,71 +42,78 @@ def ProcessData(df):
         else:   
             endDate = dataSeries ["Pull Date"]
         daysInHole = (endDate - startDate).days
-        joints = dataSeries["Joints"]
+        joints = int(dataSeries["Joints"])
         if (dataSeries["Top Depth"] < 0 ): # Catches error where top depth is negative value
             firstJoint = 0
-        else: 
-            firstJoint = math.floor(dataSeries["Top Depth"] / 7.62) # Rounds down to get # of rods ... a fraction won't do
+        else:
+            offset = 0
+            firstJoint = math.floor((dataSeries["Top Depth"]+offset) / 7.62) # Rounds down to get # of rods ... a fraction won't do
+        job = dataSeries["UWI"] + " " + str(dataSeries["Run Date"])
         grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
+        rodGradeSizeTuple = (grade, size)
 
-        # Data population
-        for j in range(joints):
-            #! Create logic that populates unique grade and size, calculates average, and populates
-            for item in uniqueListSizeGrade:
-               if (grade == item.rodGrade and size == item.rodSize):
-                   item.dataCollectionList.append({
-                       "daysInHole" : daysInHole,
-                       "UWI" : dataSeries["UWI"],
-                       "Run Job" : dataSeries["Run Job"],
-                       "Pull Job" : dataSeries["Pull Job"],
-                       "Pull Reason" : dataSeries["Pull Reason"]
-                       })
-                   item.calculateAverageRunLife()
-            #Populates arrays with values from data frame row
-            element = j + firstJoint
-            arrayElement = superiorRodString[element]["daysInHole"]
-            if (daysInHole > arrayElement):
-                superiorRodString [element] = {
-                "size" : size,
-                "grade" : grade,
-                "daysInHole" : daysInHole
-                }
-            dataTracker[element].append({
-                "size" : round(dataSeries["OD Nominal"]),
-                "grade" : dataSeries["Grade"],
-                "daysInHole" : daysInHole,
-                "UWI" : dataSeries["UWI"],
-                "Run Job" : dataSeries["Run Job"],
-                "Pull Job" : dataSeries["Pull Job"],
-                "Pull Reason" : dataSeries["Pull Reason"]
-                })
-
-    dfExport1 = pd.DataFrame(superiorRodString)
-    dfExport2 = pd.DataFrame(dataTracker)
-    dfExport1.to_excel(r"E:\Rod Component Analysis\dataExport.xlsx")
-    dfExport2.to_excel(r"E:\Rod Component Analysis\dataExport2.xlsx")
-     
+        # DATA POPULATION
+        for j in range(joints): 
+            index = j + firstJoint
+            if rodGradeSizeTuple in dataDict[index]:
+                dataDict[index][rodGradeSizeTuple]["daysInHole"].append(daysInHole)
+                dataDict[index][rodGradeSizeTuple]["job"].append(job)
+            else:
+                dataDict[index][rodGradeSizeTuple] = {"daysInHole" : [daysInHole], "job" : [job]}
+    return dataDict
     
-class uniqueRodGradeSize:
-    def __init__(self, uniqueTupleList):
-        self.rodSize = uniqueTupleList[0]
-        self.rodGrade = uniqueTupleList[1]
-        self.averageRunLife = 0
-        self.dataCollectionList = [] # elements inside defined in proccessing data list!
-                
-    def calculateAverageRunLife(self):
-        if (self.dataCollectionList.count == 0):
-            raise ValueError ("Tried calculating average when there was nothing in list!")
-        count = 0
-        sum = 0
-        for item in self.dataCollectionList:
-            count += 1
-            sum += item["daysInHole"]
-        self.averageRunLife = sum / count
-        
-        
 
+def dataAnalyze(dataDict):
+    # [2] important data sets; highest avg and highest days in hole
+    superiorRodStringAvg = []
+    for i in range(len(dataDict)):
+        superiorRodStringAvg.append({
+            "gradeSize" : "default",
+            "daysInHole" : 0,
+            "count" : 0
+            })
+    superiorRodStringHighestRun = []
+    for i in range(len(dataDict)):
+        superiorRodStringHighestRun.append({
+            "gradeSize" : "default",
+            "daysInHole" : 0,
+            })
+    for i in range(len(dataDict)):
+        for key, value in dataDict[i].items():
+            # Superior Rod String Avg Updater
+            avg = sum(value["daysInHole"]) / len(value["daysInHole"])
+            if avg > superiorRodStringAvg[i]["daysInHole"] and len(value["daysInHole"])>1:
+                superiorRodStringAvg[i]["daysInHole"] = avg
+                superiorRodStringAvg[i]["gradeSize"] = key 
+                superiorRodStringAvg[i]["count"] = len(value["daysInHole"])
+            #! Superior Rod String Highest Run Updater
+            if max(value["daysInHole"]) > superiorRodStringHighestRun[i]["daysInHole"]:
+                superiorRodStringHighestRun[i]["daysInHole"] = max(value["daysInHole"]) 
+                superiorRodStringHighestRun[i]["gradeSize"] = key
+
+    return superiorRodStringAvg, superiorRodStringHighestRun
+
+def excelCreation(dataDict, superiorRodStringAvg, superiorRodStringHighestRun):
+    # Superior Rod String Export
+    df = pd.DataFrame(superiorRodStringAvg)
+    df2 = pd.DataFrame(superiorRodStringHighestRun)
+    exportLink = r'E:\Rod Component Analysis\Superior Rod String Avg.xlsx'
+    exportLink2 = r'E:\Rod Component Analysis\Superior Rod String Highest Run.xlsx'
+    df.to_excel(exportLink)
+    df2.to_excel(exportLink2)
+
+    # Supportig Data Export
+    with open (r'E:\Rod Component Analysis\All Data.csv', 'w', newline="") as f:
+         writer = csv.writer(f)
+         writer.writerow(["Joint", "Grade/Size", "Days In Hole", "Job"])
+         for i in range(len(dataDict)):
+             for key in dataDict[i].keys():
+                 for j in range(len(dataDict[i][key]["daysInHole"])):
+                       writer.writerow([i,key,dataDict[i][key]["daysInHole"][j],dataDict[i][key]["job"][j]])
+       
+    
+                
 
 if __name__=="__main__":
     main()
