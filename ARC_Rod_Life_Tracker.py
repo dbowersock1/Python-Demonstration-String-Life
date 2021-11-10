@@ -11,7 +11,7 @@ from itertools import zip_longest
 def main():
 
     # Read Excel File and create Pandas Data Frame from information
-    excelFileLocation = r"E:\Rod Component Analysis\new dev.xlsx"
+    excelFileLocation = r"E:\Rod Component Analysis\South Wells.xlsx"
     df = pd.read_excel(excelFileLocation)
  
     # Processes data from DataTable. Returns dataDictioinary. Each index corrosponds to joint of rod
@@ -49,9 +49,20 @@ def ProcessData(df):
             offset = 0
             firstJoint = math.floor((dataSeries["Top Depth"]+offset) / 7.62) # Rounds down to get # of rods ... a fraction won't do
         job = dataSeries["UWI"] + " " + str(dataSeries["Run Date"])
-        grade = str(dataSeries["Grade"])
         size = round(dataSeries["OD Nominal"])
-        rodGradeSizeTuple = (grade, size)
+        # Filters/Fixes rod grade to certain values
+        grade = str(dataSeries["Grade"])
+        if "k" in grade or "K" in grade or "d" in grade or "D" in grade:
+            gradeinput = "D"
+        elif "m" in grade or "M" in grade:
+            gradeinput = "MMS"
+        elif 'n' in grade or 'N' in grade:
+            gradeinput = "N"
+        elif "hs" == grade or "HS" == grade:
+            gradeinput = "HS"
+        else: 
+            gradeinput = "Special/Alpha"
+        rodGradeSizeTuple = (gradeinput, size)
 
         # DATA POPULATION
         for j in range(joints): 
@@ -83,7 +94,7 @@ def dataAnalyze(dataDict):
         for key, value in dataDict[i].items():
             # Superior Rod String Avg Updater
             avg = sum(value["daysInHole"]) / len(value["daysInHole"])
-            if avg > superiorRodStringAvg[i]["daysInHole"] and len(value["daysInHole"])>1:
+            if avg > superiorRodStringAvg[i]["daysInHole"] and len(value["daysInHole"])>5:
                 superiorRodStringAvg[i]["daysInHole"] = avg
                 superiorRodStringAvg[i]["gradeSize"] = key 
                 superiorRodStringAvg[i]["count"] = len(value["daysInHole"])
@@ -112,8 +123,5 @@ def excelCreation(dataDict, superiorRodStringAvg, superiorRodStringHighestRun):
                  for j in range(len(dataDict[i][key]["daysInHole"])):
                        writer.writerow([i,key,dataDict[i][key]["daysInHole"][j],dataDict[i][key]["job"][j]])
        
-    
-                
-
 if __name__=="__main__":
     main()
